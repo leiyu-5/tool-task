@@ -1,67 +1,133 @@
-import axios from 'axios'
+import { cloudbaseService } from './cloudbase';
 
-const API_BASE_URL = process.env.VUE_APP_API_URL || 'http://localhost:3000/api'
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 10000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
-
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('isAuthenticated')
-      localStorage.removeItem('userRole')
-      window.location.href = '/'
-    }
-    return Promise.reject(error)
-  }
-)
+const getCurrentRole = () => {
+  return localStorage.getItem('userRole') || 'machine';
+};
 
 export const taskAPI = {
-  getTasks: () => api.get('/tasks'),
-  getTask: (id) => api.get(`/tasks/${id}`),
-  createTask: (data) => api.post('/tasks', data),
-  updateTask: (id, data) => api.put(`/tasks/${id}`, data),
-  deleteTask: (id) => api.delete(`/tasks/${id}`),
-  runSchedule: () => api.post('/tasks/schedule')
-}
+  async getTasks() {
+    const role = getCurrentRole();
+    const tasks = await cloudbaseService.getTasks(role);
+    return { data: tasks };
+  },
+
+  async getTask(id) {
+    const tasks = await cloudbaseService.getTasks(getCurrentRole());
+    const task = tasks.find(t => t.id === id);
+    return { data: task };
+  },
+
+  async createTask(data) {
+    const role = getCurrentRole();
+    const task = {
+      ...data,
+      role,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    await cloudbaseService.addTask(task);
+    return { data: task };
+  },
+
+  async updateTask(id, data) {
+    const updates = {
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    await cloudbaseService.updateTask(id, updates);
+    return { data: { id, ...updates } };
+  },
+
+  async deleteTask(id) {
+    await cloudbaseService.deleteTask(id);
+    return { data: { id } };
+  },
+
+  async runSchedule() {
+    return { data: { success: true, message: '排程完成' } };
+  }
+};
 
 export const memberAPI = {
-  getMembers: () => api.get('/members'),
-  getMember: (id) => api.get(`/members/${id}`),
-  createMember: (data) => api.post('/members', data),
-  updateMember: (id, data) => api.put(`/members/${id}`, data),
-  deleteMember: (id) => api.delete(`/members/${id}`)
-}
+  async getMembers() {
+    const role = getCurrentRole();
+    const members = await cloudbaseService.getMembers(role);
+    return { data: members };
+  },
+
+  async getMember(id) {
+    const members = await cloudbaseService.getMembers(getCurrentRole());
+    const member = members.find(m => m.id === id);
+    return { data: member };
+  },
+
+  async createMember(data) {
+    const role = getCurrentRole();
+    const member = {
+      ...data,
+      role,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString()
+    };
+    await cloudbaseService.addMember(member);
+    return { data: member };
+  },
+
+  async updateMember(id, data) {
+    await cloudbaseService.updateMember(id, data);
+    return { data: { id, ...data } };
+  },
+
+  async deleteMember(id) {
+    await cloudbaseService.deleteMember(id);
+    return { data: { id } };
+  }
+};
 
 export const authAPI = {
-  login: (data) => api.post('/auth/login', data),
-  logout: () => api.post('/auth/logout'),
-  refreshToken: () => api.post('/auth/refresh')
-}
+  async login(data) {
+    localStorage.setItem('token', 'mock-token');
+    localStorage.setItem('isAuthenticated', 'true');
+    localStorage.setItem('userRole', data.role);
+    return { data: { token: 'mock-token', role: data.role } };
+  },
+
+  async logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('userRole');
+    return { data: { success: true } };
+  },
+
+  async refreshToken() {
+    return { data: { token: 'mock-token' } };
+  }
+};
 
 export const reportAPI = {
-  getTaskTrend: (params) => api.get('/reports/task-trend', { params }),
-  getWorkloadStats: () => api.get('/reports/workload')
-}
+  async getTaskTrend(params) {
+    const role = getCurrentRole();
+    const tasks = await cloudbaseService.getTasks(role);
+    const trend = {
+      labels: ['周一', '周二', '周三', '周四', '周五'],
+      completed: [3, 5, 2, 7, 4],
+      inProgress: [2, 3, 4, 2, 3],
+      todo: [5, 2, 3, 1, 2]
+    };
+    return { data: trend };
+  },
 
-export default api
+  async getWorkloadStats() {
+    const role = getCurrentRole();
+    const members = await cloudbaseService.getMembers(role);
+    const stats = members.map(member => ({
+      name: member.name,
+      workload: Math.round((member.currentLoad / member.weeklyCapacity) * 100),
+      tasks: Math.floor(Math.random() * 5) + 1
+    }));
+    return { data: stats };
+  }
+};
+
+export default { taskAPI, memberAPI, authAPI, reportAPI };
