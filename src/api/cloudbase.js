@@ -1,8 +1,6 @@
-import cloudbase from '@cloudbase/js-sdk';
-
 const envId = 'test111-5gj0f8rba9c312c';
 
-const app = cloudbase.init({
+const app = window.cloudbase.init({
   env: envId
 });
 
